@@ -22,9 +22,9 @@ namespace WinServiceMon
 
                 x.StartAutomatically();                                    
 
-                x.SetDescription("Enigma Windows Service monitor with alerts");                   
-                x.SetDisplayName("Enigma ServMon and Alerts");                                  
-                x.SetServiceName("Enigma_Servmon");                                 
+                x.SetDescription("AlertBoy Windows Service to monitor other windows services ");                   
+                x.SetDisplayName("AlertBoy ServMon");                                  
+                x.SetServiceName("AlertBoy_Servmon");                                 
             });
         }
     }
