@@ -3,19 +3,26 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Timers;
 using System.ServiceProcess;
+using Microsoft.Owin.Hosting;
+using Microsoft.AspNet.SignalR;
+using Microsoft.Owin;
+using Newtonsoft.Json;
 
+[assembly: OwinStartup(typeof(WinServiceMon.Startup))]
 namespace WinServiceMon
 {
-   public  class Monitor
+
+    public class Monitor
     {
         private static Logger logger = NLog.LogManager.GetCurrentClassLogger();
 
         Timer _timerMonitor;
         Timer _timerResetQueue;
+
+        IDisposable _server;
+
 
         Queue<AlertMessage> _recentAlerts;
 
@@ -40,6 +47,14 @@ namespace WinServiceMon
                 logger.Info("No services found to monotor.");
             }
 
+            //start server
+
+            logger.Info("Attempting to start server");
+            var baseUrl = ConfigurationManager.AppSettings["baseUrl"];
+            _server = WebApp.Start<Startup>(baseUrl);
+            logger.Info("Server started at {0}", baseUrl);
+
+
             //Start Timers
             _timerMonitor.Start();
             _timerResetQueue.Start();
@@ -49,6 +64,11 @@ namespace WinServiceMon
 
         public void Stop()
         {
+            _timerMonitor.Enabled = false;
+            _timerResetQueue.Enabled = false;
+
+            _server.Dispose();
+
             logger.Warn("Enigma ServMon stopped.");
         }
 
@@ -59,7 +79,7 @@ namespace WinServiceMon
                 //We do monitoring
                 Alert();
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 logger.Info("Failed to monitor. Ex" + ex.Message);
             }
@@ -68,7 +88,7 @@ namespace WinServiceMon
                 _timerMonitor.Enabled = true;
             }
 
-            
+
         }
 
         private void _timerResetQueue_Elapsed(object sender, ElapsedEventArgs e)
@@ -116,7 +136,8 @@ namespace WinServiceMon
         {
             var servicesToMonitor = GetServicesToMonitor().ToList();
 
-            servicesToMonitor.ForEach(serv => {
+            servicesToMonitor.ForEach(serv =>
+            {
 
                 //get current status
                 var currStatus = serv.Status;
@@ -138,6 +159,27 @@ namespace WinServiceMon
 
                     // Alert
                     logger.Log(level, statusMessage);
+                    
+                }
+
+                //push notification anyway
+                try
+                {
+                    var hubAlert = new HubAlert
+                    {
+                        Message = alert.Message,
+                        Level = alert.Level.ToString(),
+                        ServiceName = alert.ServiceName,
+                        TimeStamp = alert.TimeStamp
+                    };
+
+                    var context = GlobalHost.ConnectionManager.GetHubContext<AlertHub>();
+                    var alertText = JsonConvert.SerializeObject(hubAlert);
+                    context.Clients.All.notify(alertText);
+                }
+                catch (Exception ex)
+                {
+                    logger.Info(ex.Message);
                 }
 
             });
@@ -145,7 +187,7 @@ namespace WinServiceMon
 
         private string GeLogMessageByStatus(ServiceController service)
         {
-            return string.Format("{0} has {1}", service.ServiceName, service.Status);
+            return string.Format("{0} => {1}", service.ServiceName, service.Status);
         }
 
         private LogLevel GetLevelByStatus(ServiceControllerStatus currStatus)

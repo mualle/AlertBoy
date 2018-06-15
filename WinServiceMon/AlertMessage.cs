@@ -7,10 +7,11 @@ namespace WinServiceMon
     {
         public AlertMessage()
         {
-            TimeStamp = new DateTime();
+            TimeStamp = DateTime.Now;
         }
         public string ServiceName { get; set; }
         public string Message { get; set; }
+
         public LogLevel Level { get; set; }
         public DateTime TimeStamp { get; protected set; }
 
